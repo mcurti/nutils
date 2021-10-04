@@ -34,6 +34,7 @@ IntoArray = Union['Array', numpy.ndarray, bool, int, float]
 Shape = Sequence[int]
 DType = Type[Union[bool, int, float]]
 _dtypes = bool, int, float
+_jointdtype = functools.partial(builtins.max, key=_dtypes.index)
 
 _PointsShape = Tuple[evaluable.Array, ...]
 _TransformChainsMap = Mapping[str, Tuple[EvaluableTransformChain, EvaluableTransformChain]]
@@ -69,6 +70,7 @@ if debug_flags.lower:
     offset = 0 if type(self) == _WithoutPoints else len(points_shape)
     assert result.ndim == self.ndim + offset
     assert tuple(int(sh) for sh in result.shape[offset:]) == self.shape, 'shape mismatch'
+    assert result.dtype == self.dtype, ('dtype mismatch', self.__class__)
     return result
 
   class _ArrayMeta(_ArrayMeta):
@@ -318,6 +320,14 @@ class Array(metaclass=_ArrayMeta):
   def __rmatmul__(self, other):
     'See :func:`matmul`.'
     return self._rbinop(matmul, other)
+
+  def astype(self, dtype):
+    if dtype == self.dtype:
+      return self
+    elif _jointdtype(self.dtype, dtype) == dtype:
+      return _Wrapper(evaluable.astype[dtype], self, shape=self.shape, dtype=dtype)
+    else:
+      raise TypeError('cannot cast {} to {}'.format(self.dtype, dtype))
 
   def sum(self, axis: Optional[Union[int, Sequence[int]]] = None) -> 'Array':
     'See :func:`sum`.'
@@ -733,14 +743,9 @@ class _WithoutPoints:
 class _Wrapper(Array):
 
   @classmethod
-  def broadcasted_arrays(cls, lower: Callable[..., evaluable.Array], *args: IntoArray, min_dtype: Optional[DType] = None, force_dtype: Optional[DType] = None) -> '_Wrapper':
-    broadcasted = broadcast_arrays(*args)
-    if force_dtype:
-      assert not min_dtype
-      dtype = force_dtype
-    else:
-      dtype = evaluable._jointdtype(min_dtype or bool, *(arg.dtype for arg in broadcasted))
-    return cls(lower, *broadcasted, shape=broadcasted[0].shape, dtype=dtype)
+  def broadcasted_arrays(cls, lower: Callable[..., evaluable.Array], *args: IntoArray, min_dtype: DType = bool, force_dtype: Optional[DType] = None) -> '_Wrapper':
+    broadcasted = broadcast_arrays(*args, min_dtype=min_dtype)
+    return cls(lower, *broadcasted, shape=broadcasted[0].shape, dtype=force_dtype or broadcasted[0].dtype)
 
   def __init__(self, lower: Callable[..., evaluable.Array], *args: Lowerable, shape: Shape, dtype: DType) -> None:
     self._lower = lower
@@ -883,7 +888,7 @@ class _TransformsCoords(Array):
   def __init__(self, space: str, transforms: Transforms) -> None:
     self._space = space
     self._transforms = transforms
-    super().__init__((transforms.fromdims,), int, frozenset({space}))
+    super().__init__((transforms.fromdims,), float, frozenset({space}))
 
   def lower(self, points_shape: _PointsShape, transform_chains: _TransformChainsMap, coordinates: _CoordinatesMap) -> evaluable.Array:
     index, tail = transform_chains[self._space][0].index_with_tail_in(self._transforms)
@@ -1054,7 +1059,7 @@ class _Concatenate(Array):
       raise ValueError('all the input array dimensions except for the concatenation axis must match exactly')
     super().__init__(
       shape=(*shape0[:self.axis], builtins.sum(array.shape[self.axis] for array in self.arrays), *shape0[self.axis+1:]),
-      dtype=evaluable._jointdtype(*(array.dtype for array in self.arrays)),
+      dtype=_jointdtype(*(array.dtype for array in self.arrays)),
       spaces=functools.reduce(operator.or_, (array.spaces for array in self.arrays)))
 
   def lower(self, points_shape: _PointsShape, transform_chains: _TransformChainsMap, coordinates: _CoordinatesMap) -> evaluable.Array:
@@ -1244,7 +1249,7 @@ def reciprocal(__arg: IntoArray) -> Array:
   :class:`Array`
   '''
 
-  return power(__arg, -1)
+  return power(__arg, -1.)
 
 def power(__base: IntoArray, __exponent: IntoArray) -> Array:
   '''Return the exponentiation of the arguments, elementwise.
@@ -1258,7 +1263,7 @@ def power(__base: IntoArray, __exponent: IntoArray) -> Array:
   :class:`Array`
   '''
 
-  return _Wrapper.broadcasted_arrays(evaluable.power, __base, __exponent, min_dtype=float)
+  return _Wrapper.broadcasted_arrays(evaluable.power, __base, __exponent, min_dtype=int)
 
 def sqrt(__arg: IntoArray) -> Array:
   '''Return the square root of the argument, elementwise.
@@ -1788,6 +1793,8 @@ def sum(__arg: IntoArray, axis: Optional[Union[int, Sequence[int]]] = None) -> A
   '''
 
   arg = Array.cast(__arg)
+  if arg.dtype == bool:
+    arg = arg.astype(int)
   if axis is None:
     if arg.ndim == 0:
       raise ValueError('Cannot sum last axis of 0-D array.')
@@ -1814,8 +1821,10 @@ def product(__arg: IntoArray, axis: int) -> Array:
   '''
 
   arg = Array.cast(__arg)
+  if arg.dtype == bool:
+    arg = arg.astype(int)
   transposed = _Transpose.to_end(arg, axis)
-  return _Wrapper(evaluable.Product, transposed, shape=transposed.shape[:-1], dtype=int if transposed.dtype == bool else transposed.dtype)
+  return _Wrapper(evaluable.Product, transposed, shape=transposed.shape[:-1], dtype=arg.dtype)
 
 # LINEAR ALGEBRA
 
@@ -1978,9 +1987,8 @@ def eig(__arg: IntoArray, __axes: Tuple[int, int] = (-2,-1), symmetric: bool = F
 
   arg = Array.cast(__arg)
   transposed = _Transpose.to_end(arg, *__axes)
-  # FIXME: use complex dtype if not symmetric
-  eigval = _Wrapper(functools.partial(_eval_eigval, symmetric=symmetric), arg, shape=arg.shape[:-1], dtype=float)
-  eigvec = _Wrapper(functools.partial(_eval_eigvec, symmetric=symmetric), arg, shape=arg.shape, dtype=float)
+  eigval = _Wrapper(functools.partial(_eval_eigval, symmetric=symmetric), arg, shape=arg.shape[:-1], dtype=float if symmetric else complex)
+  eigvec = _Wrapper(functools.partial(_eval_eigvec, symmetric=symmetric), arg, shape=arg.shape, dtype=float if symmetric and arg.dtype != complex else complex)
   return diagonalize(eigval), eigvec
 
 def _takediag(__arg: IntoArray, _axis1: int = -2, _axis2: int =-1) -> Array:
@@ -2449,7 +2457,7 @@ def replace_arguments(__array: IntoArray, __arguments: Mapping[str, IntoArray]) 
 
   return _Replace(Array.cast(__array), {k: Array.cast(v) for k, v in __arguments.items()})
 
-def broadcast_arrays(*arrays: IntoArray) -> Tuple[Array, ...]:
+def broadcast_arrays(*arrays: IntoArray, min_dtype: DType = bool) -> Tuple[Array, ...]:
   '''Broadcast the given arrays.
 
   Parameters
@@ -2464,7 +2472,8 @@ def broadcast_arrays(*arrays: IntoArray) -> Tuple[Array, ...]:
 
   arrays_ = tuple(map(Array.cast, arrays))
   shape = broadcast_shapes(*(arg.shape for arg in arrays_))
-  return tuple(broadcast_to(arg, shape) for arg in arrays_)
+  dtype = _jointdtype(min_dtype, *(arg.dtype for arg in arrays_))
+  return tuple(broadcast_to(arg, shape).astype(dtype) for arg in arrays_)
 
 def broadcast_shapes(*shapes: Shape) -> Tuple[int, ...]:
   '''Broadcast the given shapes into a single shape.
@@ -2823,12 +2832,12 @@ def Sampled(__points: IntoArray, expect: IntoArray) -> Array:
   points = Array.cast(__points)
   expect = Array.cast(expect)
   assert points.ndim == 1 and expect.ndim == 2 and expect.shape[1] == points.shape[0]
-  return _Wrapper(evaluable.Sampled, points, _WithoutPoints(expect), shape=(expect.shape[0],), dtype=int)
+  return _Wrapper(evaluable.Sampled, points, _WithoutPoints(expect), shape=(expect.shape[0],), dtype=float)
 
 def piecewise(level: IntoArray, intervals: Sequence[IntoArray], *funcs: IntoArray) -> Array:
   'piecewise'
   level = Array.cast(level)
-  return util.sum(_array_int(greater(level, interval)) for interval in intervals).choose(funcs)
+  return util.sum(greater(level, interval).astype(int) for interval in intervals).choose(funcs)
 
 def partition(f: IntoArray, *levels: float) -> Sequence[Array]:
   '''Create a partition of unity for a scalar function f.
@@ -2912,7 +2921,7 @@ def choose(__index: IntoArray, __choices: Sequence[IntoArray]) -> Array:
     raise ValueError
   choices = broadcast_arrays(*__choices)
   shape = choices[0].shape
-  dtype = evaluable._jointdtype(*(choice.dtype for choice in choices))
+  dtype = _jointdtype(*(choice.dtype for choice in choices))
   index = _append_axes(index, shape)
   spaces = functools.reduce(operator.or_, (arg.spaces for arg in choices), index.spaces)
   return _Wrapper(_eval_choose, index, *choices, shape=shape, dtype=dtype)
@@ -2948,9 +2957,6 @@ def simplified(__arg: IntoArray) -> Array:
 def iszero(__arg: IntoArray) -> bool:
   warnings.deprecation('`nutils.function.iszero` is deprecated. Use `evaluable.iszero` on the lowered function instead.')
   return False
-
-def _array_int(__arg: IntoArray) -> Array:
-  return _Wrapper.broadcasted_arrays(evaluable.Int, __arg, force_dtype=int)
 
 def add_T(__arg: IntoArray, axes: Tuple[int, int] = (-2,-1)) -> Array:
   'add transposed'
@@ -3160,7 +3166,7 @@ class PlainBasis(Basis):
   '''
 
   def __init__(self, coefficients: Sequence[numpy.ndarray], dofs: Sequence[numpy.ndarray], ndofs: int, index: Array, coords: Array) -> None:
-    self._coeffs = tuple(types.arraydata(c) for c in coefficients)
+    self._coeffs = tuple(types.arraydata(numpy.asarray(c, dtype=float)) for c in coefficients)
     self._dofs = tuple(map(types.arraydata, dofs))
     assert len(self._coeffs) == len(self._dofs)
     assert all(c.ndim == 1+coords.shape[0] for c in self._coeffs)
