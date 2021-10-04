@@ -794,10 +794,15 @@ class _AtSample(function.Array):
     ielem = evaluable.loop_index('_sample_' + '_'.join(self._sample.spaces), self._sample.nelems)
     points_shape, transform_chains, coordinates = self._sample.update_lower_args(ielem, points_shape, transform_chains, coordinates)
     indices = self._sample.get_evaluable_indices(ielem)
-    axes = range(axis, axis + indices.ndim)
     func = self._func.lower(points_shape, transform_chains, coordinates)
-    inflated = evaluable.Transpose.from_end(evaluable.Inflate(evaluable.Transpose.to_end(func, *axes), indices, self._sample.npoints), axis)
-    return evaluable.loop_sum(inflated, ielem)
+    func = evaluable.Transpose.to_end(func, *range(axis, axis + indices.ndim))
+    while indices.ndim > 1:
+      indices = evaluable.Ravel(indices)
+      func = evaluable.Ravel(func)
+    indices = evaluable.loop_concatenate(indices, ielem)
+    func = evaluable.loop_concatenate(func, ielem)
+    # TODO add simplification for _DefaultIndex where we can simply return func
+    return evaluable.Transpose.from_end(evaluable.Inflate(func, indices, self._sample.npoints), axis)
 
 class _Basis(function.Array):
 
