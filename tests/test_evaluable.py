@@ -389,6 +389,9 @@ def _check(name, op, n_op, *arg_values, hasgrad=True, zerograd=False, ndim=2):
   check(name, op=op, n_op=n_op, arg_values=arg_values, hasgrad=hasgrad, zerograd=zerograd, ndim=ndim)
 
 _check('identity', lambda f: evaluable.asarray(f), lambda a: a, ANY(2,4,2))
+_check('int', lambda f: evaluable.Int(f), lambda a: a.astype(int), INT(2,4,2))
+_check('float', lambda f: evaluable.Float(f), lambda a: a.astype(float), ANY(2,4,2))
+_check('complex', lambda f: evaluable.Complex(f), lambda a: a.astype(complex), ANY(2,4,2))
 _check('const', lambda f: evaluable.asarray(numpy.arange(16, dtype=float).reshape(2,4,2)), lambda a: numpy.arange(16, dtype=float).reshape(2,4,2), ANY(2,4,2))
 _check('zeros', lambda f: evaluable.zeros([1,4,3,4]), lambda a: numpy.zeros([1,4,3,4]), ANY(4,3,4))
 _check('ones', lambda f: evaluable.ones([1,4,3,4]), lambda a: numpy.ones([1,4,3,4]), ANY(4,3,4))
