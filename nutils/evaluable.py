@@ -1388,6 +1388,15 @@ class InsertAxis(Array):
     def _const_uniform(self):
         return self.func._const_uniform
 
+    def _transpose(self, axes):
+        f = self.func
+        while isinstance(f, InsertAxis):
+            f = f.func
+        if all(i == j for i, j in enumerate(axes[:f.ndim])):
+            for axis in axes[f.ndim:]:
+                f = InsertAxis(f, self.shape[axis])
+            return f
+
 
 class Transpose(Array):
 
