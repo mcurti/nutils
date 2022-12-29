@@ -1758,6 +1758,8 @@ class Multiply(Array):
 
     def _add(self, other):
         func1, func2 = self.funcs
+        if func1 == other and iszero(func2 + 1) or func2 == other and iszero(func1 + 1):
+            return zeros_like(self)
         if isinstance(other, Multiply):
             for common in self.funcs & other.funcs:
                 return common * Add(self.funcs + other.funcs - [common, common])
