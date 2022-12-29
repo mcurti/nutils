@@ -2375,6 +2375,19 @@ class Cos(Pointwise):
     complex_deriv = lambda x: -Sin(x),
     return_type = lambda T: complex if T == complex else float
 
+    def _simplified(self):
+        arg, = self.args
+        if iszero(arg):
+            return ones(self.shape, dtype=self.dtype)
+        return super()._simplified()
+
+    def _multiply(self, other):
+        arg, = self.args
+        if other == self:
+            return .5 + Cos(arg * 2) * .5
+        if other == Sin(arg):
+            return Sin(arg * 2) * .5
+
 
 class Sin(Pointwise):
     'Sine, element-wise.'
@@ -2382,6 +2395,19 @@ class Sin(Pointwise):
     evalf = staticmethod(numpy.sin)
     complex_deriv = Cos,
     return_type = lambda T: complex if T == complex else float
+
+    def _simplified(self):
+        arg, = self.args
+        if iszero(arg):
+            return zeros(self.shape, dtype=self.dtype)
+        return super()._simplified()
+
+    def _multiply(self, other):
+        arg, = self.args
+        if other == self:
+            return .5 - Cos(arg * 2) * .5
+        if other == Sin(arg):
+            return Sin(arg * 2) * .5
 
 
 class Tan(Pointwise):
