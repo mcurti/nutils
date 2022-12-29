@@ -861,8 +861,8 @@ class asciitree(TestCase):
         self.assertEqual(f.asciitree(richoutput=True),
                          '%0 = Sin; f:2,2\n'
                          '└ %1 = Power; f:2,2\n'
-                         '  ├ %2 = InsertAxis; f:2,2\n'
-                         '  │ ├ %3 = InsertAxis; f:2\n'
+                         '  ├ %2 = InsertAxis; f:(2),(2)\n'
+                         '  │ ├ %3 = InsertAxis; f:(2)\n'
                          '  │ │ ├ %4 = IntToFloat; f:\n'
                          '  │ │ │ └ 0\n'
                          '  │ │ └ 2\n'
@@ -895,7 +895,7 @@ class asciitree(TestCase):
                          '%B0 = LoopConcatenate\n'
                          '├ shape[0] = %A1 = Take; i:; [2,2]\n'
                          '│ ├ %A2 = _SizesToOffsets; i:3; [0,2]\n'
-                         '│ │ └ %A3 = InsertAxis; i:2; [1,1]\n'
+                         '│ │ └ %A3 = InsertAxis; i:(2); [1,1]\n'
                          '│ │   ├ 1\n'
                          '│ │   └ 2\n'
                          '│ └ 2\n'
@@ -908,7 +908,7 @@ class asciitree(TestCase):
                          '│ └ %B7 = Add; i:; [1,2]\n'
                          '│   ├ %B5\n'
                          '│   └ 1\n'
-                         '└ func = %B8 = InsertAxis; i:1; [0,1]\n'
+                         '└ func = %B8 = InsertAxis; i:(1); [0,1]\n'
                          '  ├ %B5\n'
                          '  └ 1\n')
 
@@ -924,7 +924,7 @@ class asciitree(TestCase):
                          '%B0 = LoopConcatenate\n'
                          '├ shape[0] = %A1 = Take; i:; [2,2]\n'
                          '│ ├ %A2 = _SizesToOffsets; i:3; [0,2]\n'
-                         '│ │ └ %A3 = InsertAxis; i:2; [1,1]\n'
+                         '│ │ └ %A3 = InsertAxis; i:(2); [1,1]\n'
                          '│ │   ├ 1\n'
                          '│ │   └ 2\n'
                          '│ └ 2\n'
@@ -937,7 +937,7 @@ class asciitree(TestCase):
                          '│ └ %B7 = Add; i:; [1,2]\n'
                          '│   ├ %B5\n'
                          '│   └ 1\n'
-                         '└ func = %B8 = InsertAxis; i:1; [0,1]\n'
+                         '└ func = %B8 = InsertAxis; i:(1); [0,1]\n'
                          '  ├ %B5\n'
                          '  └ 1\n')
 
