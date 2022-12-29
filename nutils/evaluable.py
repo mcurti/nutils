@@ -2041,6 +2041,8 @@ class Sum(Array):
         super().__init__(args=(func,), shape=func.shape[:-1], dtype=func.dtype)
 
     def _simplified(self):
+        if _equals_scalar_constant(self.func.shape[-1], 0):
+            return Zeros(self.shape, self.dtype)
         if _equals_scalar_constant(self.func.shape[-1], 1):
             return Take(self.func, constant(0))
         return self.func._sum(self.ndim)
