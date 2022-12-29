@@ -1929,10 +1929,10 @@ class Add(Array):
 
     def _add(self, other):
         func1, func2 = self.funcs
-        func1_other = func1._add(other)
+        func1_other = func1._add(other) or other._add(func1)
         if func1_other is not None:
             return add(func1_other, func2)
-        func2_other = func2._add(other)
+        func2_other = func2._add(other) or other._add(func2)
         if func2_other is not None:
             return add(func1, func2_other)
 
