@@ -56,6 +56,13 @@ _env = {key[17:]: val.lower() for key, val in os.environ.items() if key.startswi
 
 GRAPHVIZ = _env.pop('graphviz', 'dot')
 
+PROFILE = set(filter(None, _env.pop('PROFILE', '').lower().split(':')))
+_valid = 'table', 'graph'
+if not PROFILE.issubset(_valid):
+    warnings.warn(f'unused profile flags: {", ".join(PROFILE.difference(_valid))}')
+    PROFILE.intersection_update(_valid)
+del _valid
+
 if _env:
     warnings.warn(f'unused evaluable options: {", ".join(_env)}')
 
@@ -5193,20 +5200,22 @@ def eval_sparse(funcs: AsEvaluableArray, **arguments: typing.Mapping[str, numpy.
 
     funcs = Tuple(tuple(func.as_evaluable_array.assparse for func in funcs)).optimized_for_numpy
 
-    if not GRAPHVIZ:
+    if not PROFILE:
         return funcs.eval(**arguments)
 
     retval, node = funcs.eval_profiling(**arguments)
 
-    maxtime = builtins.max(n.metadata[1].time for n in node.walk(set()))
-    fill_color = (lambda node: f'0,{node.metadata[1].time/maxtime:.2f},1') if maxtime else None
-    node.export_graphviz(fill_color=fill_color, dot_path=GRAPHVIZ)
+    if 'graph' in PROFILE:
+        maxtime = builtins.max(n.metadata[1].time for n in node.walk(set()))
+        fill_color = (lambda node: f'0,{node.metadata[1].time/maxtime:.2f},1') if maxtime else None
+        node.export_graphviz(fill_color=fill_color, dot_path=GRAPHVIZ)
 
-    tottime = builtins.sum(n.metadata[1].time for n in node.walk(set()))
-    aggstats = [(builtins.sum(v.time for v in values), builtins.sum(v.ncalls for v in values), key) for key, values in util.gather(n.metadata for n in node.walk(set()))]
-    aggstats.sort(reverse=True)
-    log.info(f'total time: {tottime/1e6:.0f}ms\n'
-        + '\n'.join(f'{t/1e6:4.0f} {k} ({n} calls, avg {t/(1e6*n):.3f} per call)' for t, n, k in aggstats if n))
+    if 'table' in PROFILE:
+        tottime = builtins.sum(n.metadata[1].time for n in node.walk(set()))
+        aggstats = [(builtins.sum(v.time for v in values), builtins.sum(v.ncalls for v in values), key) for key, values in util.gather(n.metadata for n in node.walk(set()))]
+        aggstats.sort(reverse=True)
+        log.info(f'total time: {tottime/1e6:.0f}ms\n'
+            + '\n'.join(f'{t/1e6:4.0f} {k} ({n} calls, avg {t/(1e6*n):.3f} per call)' for t, n, k in aggstats if n))
 
     return retval
 
