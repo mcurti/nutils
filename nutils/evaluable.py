@@ -3039,7 +3039,12 @@ class Inflate(Array):
     def _take(self, index, axis):
         if axis != self.ndim-1:
             return Inflate(_take(self.func, index, axis), self.dofmap, self.length)
-        newindex, newdofmap = SwapInflateTake(self.dofmap, index)
+        if index.isconstant and self.dofmap.isconstant:
+            newindex, newdofmap, length = SwapInflateTake.evalf(self.dofmap.eval(), index.eval())
+            newindex = Range(constant(length)) if numpy.all(newindex == numpy.arange(length)) else constant(newindex)
+            newdofmap = Range(constant(length)) if numpy.all(newdofmap == numpy.arange(length)) else constant(newdofmap)
+        else:
+            newindex, newdofmap = SwapInflateTake(self.dofmap, index)
         if self.dofmap.ndim:
             func = self.func
             for i in range(self.dofmap.ndim-1):
