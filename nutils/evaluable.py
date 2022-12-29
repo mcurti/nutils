@@ -1786,10 +1786,10 @@ class Multiply(Array):
 
     def _multiply(self, other):
         func1, func2 = self.funcs
-        func1_other = func1._multiply(other)
+        func1_other = func1._multiply(other) or other._multiply(func1)
         if func1_other is not None:
             return multiply(func1_other, func2)
-        func2_other = func2._multiply(other)
+        func2_other = func2._multiply(other) or other._multiply(func2)
         if func2_other is not None:
             return multiply(func1, func2_other)
 
