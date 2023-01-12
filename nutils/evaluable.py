@@ -70,6 +70,13 @@ if not OPTIMIZE.issubset(_valid):
     OPTIMIZE.intersection_update(_valid)
 del _valid
 
+NODE = set(filter(None, _env.pop('NODE', '').lower().split(':')))
+_valid = 'hash',
+if not NODE.issubset(_valid):
+    warnings.warn(f'unused node flags: {", ".join(NODE.difference(_valid))}')
+    NODE.intersection_update(_valid)
+del _valid
+
 if _env:
     warnings.warn(f'unused evaluable options: {", ".join(_env)}')
 
@@ -380,7 +387,7 @@ class Evaluable(types.Singleton):
 
     @property
     def _node_details(self):
-        return ''
+        return types.nutils_hash(self)[:4].hex() if 'hash' in NODE else ''
 
     def asciitree(self, richoutput=False):
         'string representation'
