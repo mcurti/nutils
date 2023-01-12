@@ -63,6 +63,13 @@ if not PROFILE.issubset(_valid):
     PROFILE.intersection_update(_valid)
 del _valid
 
+OPTIMIZE = set(filter(None, _env.pop('OPTIMIZE', '').lower().split(':')))
+_valid = 'simple', 'separate'
+if not OPTIMIZE.issubset(_valid):
+    warnings.warn(f'unused optimize flags: {", ".join(OPTIMIZE.difference(_valid))}')
+    OPTIMIZE.intersection_update(_valid)
+del _valid
+
 if _env:
     warnings.warn(f'unused evaluable options: {", ".join(_env)}')
 
@@ -450,8 +457,12 @@ class Evaluable(types.Singleton):
 
     @property
     def optimized_for_numpy(self):
-        retval = self.simplified._optimized_for_numpy1() or self
-        return retval._combine_loop_concatenates(frozenset())
+        f = self.simplified
+        if 'simple' not in OPTIMIZE:
+            f = f._optimized_for_numpy1() or f
+        if 'separate' not in OPTIMIZE:
+            f = f._combine_loop_concatenates(frozenset())
+        return f
 
     @replace(depthfirst=True, recursive=True)
     def _optimized_for_numpy1(obj):
