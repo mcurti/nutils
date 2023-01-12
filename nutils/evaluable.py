@@ -77,6 +77,8 @@ if not NODE.issubset(_valid):
     NODE.intersection_update(_valid)
 del _valid
 
+LOGEVALF = set(filter(None, _env.pop('LOGEVALF', '').lower().split(':')))
+
 if _env:
     warnings.warn(f'unused evaluable options: {", ".join(_env)}')
 
@@ -854,6 +856,23 @@ if debug_flags.evalf:
         def __new__(mcls, name, bases, namespace):
             if 'evalf' in namespace:
                 namespace['evalf'] = _evalf_checker(namespace['evalf'])
+            return super().__new__(mcls, name, bases, namespace)
+
+
+if LOGEVALF:
+
+    def _logevalf_wrapper(self, *args):
+        retval = self._logevalf_wrapped(*args)
+        if any(types.nutils_hash(self).startswith(h) for h in LOGEVALF):
+            with log.context(f'evalf {type(self).__name__} [{types.nutils_hash(self).hex()}]'):
+                log.debug(retval)
+        return retval
+
+    class _ArrayMeta(_ArrayMeta):
+        def __new__(mcls, name, bases, namespace):
+            if 'evalf' in namespace:
+                namespace['_logevalf_wrapped'] = namespace['evalf']
+                namespace['evalf'] = _logevalf_wrapper
             return super().__new__(mcls, name, bases, namespace)
 
 
