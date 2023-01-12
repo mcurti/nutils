@@ -381,9 +381,10 @@ class Evaluable(types.Singleton):
         else:
             return values[-1]
 
-    def eval_withtimes(self, times, **evalargs):
+    def eval_profiling(self, **evalargs):
         '''Evaluate function on a specified element, point set while measure time of each step.'''
 
+        times = collections.defaultdict(_Stats)
         values = [evalargs]
         try:
             values.extend(op.evalf_withtimes(times, *[values[i] for i in indices]) for op, indices in self.serialized)
@@ -393,27 +394,7 @@ class Evaluable(types.Singleton):
             log.error(self._format_stack(values, e))
             raise
         else:
-            return values[-1]
-
-    @contextlib.contextmanager
-    def session(self, graphviz):
-        if graphviz is None:
-            yield self.eval
-            return
-        stats = collections.defaultdict(_Stats)
-
-        def eval(**args):
-            return self.eval_withtimes(stats, **args)
-        with log.context('eval'):
-            yield eval
-            node = self._node({}, None, stats)
-            maxtime = builtins.max(n.metadata[1].time for n in node.walk(set()))
-            tottime = builtins.sum(n.metadata[1].time for n in node.walk(set()))
-            aggstats = tuple((key, builtins.sum(v.time for v in values), builtins.sum(v.ncalls for v in values)) for key, values in util.gather(n.metadata for n in node.walk(set())))
-            fill_color = (lambda node: '0,{:.2f},1'.format(node.metadata[1].time/maxtime)) if maxtime else None
-            node.export_graphviz(fill_color=fill_color, dot_path=graphviz)
-            log.info('total time: {:.0f}ms\n'.format(tottime/1e6) + '\n'.join('{:4.0f} {} ({} calls, avg {:.3f} per call)'.format(t / 1e6, k, n, t / (1e6*n))
-                                                                              for k, t, n in sorted(aggstats, reverse=True, key=lambda item: item[1]) if n))
+            return values[-1], self._node({}, None, times)
 
     def _iter_stack(self):
         yield '%0 = EVALARGS'
@@ -5201,9 +5182,24 @@ def eval_sparse(funcs: AsEvaluableArray, **arguments: typing.Mapping[str, numpy.
     results : :class:`tuple` of sparse data arrays
     '''
 
-    funcs = tuple(func.as_evaluable_array.assparse for func in funcs)
-    with Tuple(funcs).optimized_for_numpy.session(graphviz=graphviz) as eval:
-        return eval(**arguments)
+    funcs = Tuple(tuple(func.as_evaluable_array.assparse for func in funcs)).optimized_for_numpy
+
+    if not graphviz:
+        return funcs.eval(**arguments)
+
+    retval, node = funcs.eval_profiling(**arguments)
+
+    maxtime = builtins.max(n.metadata[1].time for n in node.walk(set()))
+    fill_color = (lambda node: f'0,{node.metadata[1].time/maxtime:.2f},1') if maxtime else None
+    node.export_graphviz(fill_color=fill_color, dot_path=graphviz)
+
+    tottime = builtins.sum(n.metadata[1].time for n in node.walk(set()))
+    aggstats = [(builtins.sum(v.time for v in values), builtins.sum(v.ncalls for v in values), key) for key, values in util.gather(n.metadata for n in node.walk(set()))]
+    aggstats.sort(reverse=True)
+    log.info(f'total time: {tottime/1e6:.0f}ms\n'
+        + '\n'.join(f'{t/1e6:4.0f} {k} ({n} calls, avg {t/(1e6*n):.3f} per call)' for t, n, k in aggstats if n))
+
+    return retval
 
 
 if __name__ == '__main__':

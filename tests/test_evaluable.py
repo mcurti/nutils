@@ -96,13 +96,11 @@ class check(TestCase):
                                        desired=self.desired)
 
     @unittest.skipIf(sys.version_info < (3, 7), 'time.perf_counter_ns is not available')
-    def test_eval_withtimes(self):
+    def test_eval_profiling(self):
         evalargs = dict(zip(self.arg_names, self.arg_values))
         without_times = self.actual.eval(**evalargs)
-        stats = collections.defaultdict(evaluable._Stats)
-        with_times = self.actual.eval_withtimes(stats, **evalargs)
+        with_times, node = self.actual.eval_profiling(**evalargs)
         self.assertArrayAlmostEqual(with_times, without_times, 15)
-        self.assertIn(self.actual, stats)
 
     def test_getitem(self):
         for idim in range(self.actual.ndim):
@@ -388,10 +386,8 @@ class check(TestCase):
         with self.subTest('from-cache'):
             if node:
                 self.assertEqual(self.actual._node(cache, None, times), node)
-        with self.subTest('with-times'):
-            times = collections.defaultdict(evaluable._Stats)
-            self.actual.eval_withtimes(times, **dict(zip(self.arg_names, self.arg_values)))
-            self.actual._node(cache, None, times)
+        with self.subTest('profiling'):
+            self.actual.eval_profiling(**dict(zip(self.arg_names, self.arg_values)))
 
 
 def generate(*shape, real, imag, zero, negative):
