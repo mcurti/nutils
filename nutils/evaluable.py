@@ -51,7 +51,16 @@ import contextlib
 import subprocess
 import os
 
-graphviz = os.environ.get('NUTILS_GRAPHVIZ')
+
+_env = {key[17:]: val.lower() for key, val in os.environ.items() if key.startswith('NUTILS_EVALUABLE_')}
+
+GRAPHVIZ = _env.pop('graphviz', 'dot')
+
+if _env:
+    warnings.warn(f'unused evaluable options: {", ".join(_env)}')
+
+del _env
+
 
 isevaluable = lambda arg: isinstance(arg, Evaluable)
 
@@ -5184,14 +5193,14 @@ def eval_sparse(funcs: AsEvaluableArray, **arguments: typing.Mapping[str, numpy.
 
     funcs = Tuple(tuple(func.as_evaluable_array.assparse for func in funcs)).optimized_for_numpy
 
-    if not graphviz:
+    if not GRAPHVIZ:
         return funcs.eval(**arguments)
 
     retval, node = funcs.eval_profiling(**arguments)
 
     maxtime = builtins.max(n.metadata[1].time for n in node.walk(set()))
     fill_color = (lambda node: f'0,{node.metadata[1].time/maxtime:.2f},1') if maxtime else None
-    node.export_graphviz(fill_color=fill_color, dot_path=graphviz)
+    node.export_graphviz(fill_color=fill_color, dot_path=GRAPHVIZ)
 
     tottime = builtins.sum(n.metadata[1].time for n in node.walk(set()))
     aggstats = [(builtins.sum(v.time for v in values), builtins.sum(v.ncalls for v in values), key) for key, values in util.gather(n.metadata for n in node.walk(set()))]
